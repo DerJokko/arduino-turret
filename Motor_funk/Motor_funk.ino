@@ -13,10 +13,10 @@ const unsigned long TIMEOUT_MS = 200; // Funk-Timeout
 
 // ---------- Stepper ----------
 const int stepsPerRevolution = 2048;
-Stepper motorHorizontal(stepsPerRevolution, 8, 10, 9, 11);
+Stepper motorHorizontal(stepsPerRevolution, 4, 6, 5, 7);
 
 // --- Motor-Konfig ---
-int maxRPM = 16;
+int maxRPM = 15;
 const int stepMultiplier = 4;
 
 void setup() {
@@ -45,7 +45,7 @@ void loop() {
   }
 
   MoveHorizontal(receivedValue);
-  delay(20);
+  delay(5);
 }
 
 void MoveHorizontal(int value) {
