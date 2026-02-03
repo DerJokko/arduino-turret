@@ -7,24 +7,17 @@
 RF24 radio(9, 10);
 const byte address[6] = "00001";
 
-struct DataPacket {
-  int vrx;
-  int vry;
-  bool fire;
-};
-
-DataPacket data;
+int16_t receivedValue = 0;
+unsigned long lastReceiveTime = 0;
+const unsigned long TIMEOUT_MS = 200; // Funk-Timeout
 
 // ---------- Stepper ----------
 const int stepsPerRevolution = 2048;
 Stepper motorHorizontal(stepsPerRevolution, 8, 10, 9, 11);
 
-// --- Konfiguration ---
-int idleValue = 512;
+// --- Motor-Konfig ---
 int maxRPM = 16;
-int puffer = 20;
-
-int lastVRx = 512;
+const int stepMultiplier = 4;
 
 void setup() {
   Serial.begin(9600);
@@ -36,39 +29,37 @@ void setup() {
 }
 
 void loop() {
-  if (radio.available()) {
-    radio.read(&data, sizeof(data));
-    lastVRx = data.vrx;
 
-    if (data.fire) {
-      Serial.println("Fire!");
-    }
+  // 📡 Empfang
+  if (radio.available()) {
+    radio.read(&receivedValue, sizeof(receivedValue));
+    lastReceiveTime = millis();
+
+    Serial.print("Received: ");
+    Serial.println(receivedValue);
   }
 
-  MoveHorizontal(lastVRx);
+  // 🚨 Failsafe: kein Signal → STOP
+  if (millis() - lastReceiveTime > TIMEOUT_MS) {
+    receivedValue = 0;
+  }
+
+  MoveHorizontal(receivedValue);
   delay(20);
 }
 
-void MoveHorizontal(int joystickValue) {
-  int delta = joystickValue - idleValue;
+void MoveHorizontal(int value) {
 
-  if (abs(delta) < puffer) return;
+  // Wert 0 → Motor aus
+  if (value == 0) return;
 
-  float speedFraction = (float)delta / 512.0;
+  // Normieren auf -1 … +1
+  float speedFraction = (float)value / 512.0;
   int motorRPM = speedFraction * maxRPM;
 
   int direction = (motorRPM > 0) ? 1 : -1;
-
-  const int stepMultiplier = 4;
   int stepsToMove = abs(motorRPM) * stepMultiplier;
 
   motorHorizontal.setSpeed(abs(motorRPM));
   motorHorizontal.step(stepsToMove * direction);
-
-  Serial.print("VRx: ");
-  Serial.print(joystickValue);
-  Serial.print("  delta: ");
-  Serial.print(delta);
-  Serial.print("  RPM: ");
-  Serial.println(motorRPM);
 }

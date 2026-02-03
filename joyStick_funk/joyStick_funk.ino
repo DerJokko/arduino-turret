@@ -1,73 +1,39 @@
-#include <Stepper.h>
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
 
-const int stepsPerRevolution = 2048;  // 28BYJ-48
-Stepper motorHorizontal(stepsPerRevolution, 8, 10, 9, 11);
+RF24 radio(9, 10); // CE, CSN
+const byte address[6] = "00001";
 
-// --- Konfiguration ---
-int idleValue = 512;  // Wert, bei dem Motor stillsteht
-int speedInput = 512;   // Testwert: 0-1024
-int maxRPM = 16;      // maximale Drehgeschwindigkeit
-int puffer = 20;      // Puffer, bei dem der Motor nicht dreht
+const int VRx_PIN = A0;
+const int DEADZONE = 20;
 
-int FIRE_PIN = 2;
-int VRx = 0;
-int VRy = 1;
+int16_t sendValue = 0;
 
 void setup() {
   Serial.begin(9600);
 
-  pinMode(FIRE_PIN, INPUT);
+  radio.begin();
+  radio.openWritingPipe(address);
+  radio.setPALevel(RF24_PA_LOW);
+  radio.stopListening();
 }
 
 void loop() {
-  MoveHorizontal();
-  delay(20);
-}
+  int raw = analogRead(VRx_PIN);   // 0–1023
+  int centered = raw - 512;        // -512 … +511
 
-void MoveHorizontal() {
-  int delta = readJoystick() - idleValue;  // Differenz vom Idle
-
-  if (abs(delta) < puffer) return;  // Motor still
-
-  // Berechne proportionale Geschwindigkeit
-  // delta negativ -> links, positiv -> rechts
-  float speedFraction = (float)delta / 512.0;  // Werte von -1 bis +1
-  int motorRPM = speedFraction * maxRPM;       // -maxRPM bis +maxRPM
-
-  // Drehrichtung
-  int direction = (motorRPM > 0) ? 1 : -1;
-
-  // Multiplikator anpassen für Kleinschrittigkeit
-  const int stepMultiplier = 4;
-  // Schrittzahl pro Loop (für sichtbare Bewegung)
-  int stepsToMove = abs(motorRPM) * stepMultiplier;
-
-  // Setze Geschwindigkeit und bewege Motor
-  motorHorizontal.setSpeed(abs(motorRPM));
-  motorHorizontal.step(stepsToMove * direction);
-
-  // Optional: Debug-Ausgabe
-  
-  Serial.print("speedInput: ");
-  Serial.print(speedInput);
-  Serial.print("  delta: ");
-  Serial.print(delta);
-  Serial.print("  motorRPM: ");
-  Serial.println(motorRPM);
-  
-}
-
-int readJoystick() {
-  if (digitalRead(FIRE_PIN) == HIGH) {
-    Serial.println("Fire");
+  // Deadzone → 0 senden
+  if (abs(centered) < DEADZONE) {
+    sendValue = 0;
+  } else {
+    sendValue = centered;
   }
 
-  VRx = analogRead(A0);  // liest 0–1023
-  VRy = analogRead(A1);  // liest 0–1023
-  Serial.print("VRx: ");
-  Serial.print(VRx);
-  Serial.print(", VRy: ");
-  Serial.println(VRy);
+  radio.write(&sendValue, sizeof(sendValue));
 
-  return VRx;
+  Serial.print("Send: ");
+  Serial.println(sendValue);
+
+  delay(20);
 }
