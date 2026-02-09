@@ -1,39 +1,100 @@
+
+/*
+Code für Uno mit Joystick und Sender
+ - left/right 
+ - fire button
+
+| NRF24L01 | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+|   VCC    | 3.3V              | NIEMALS 5V       |
+|   GND    | GND               | Gemeinsame Masse |
+|   CE     | Pin 9             | Frei wählbar     |
+|   CSN    | Pin 10            | Frei wählbar     |
+|   SCK    | Pin 13            | SPI-Clock        |
+|   MOSI   | Pin 11            | SPI-Daten        |
+|   MISO   | Pin 12            | SPI-Daten        |
+|   IRQ    | nicht anschließen | Optional         |
+
+
+| Joystick | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| GND      | GND               |                  |
+| +5V      | 5V                |                  |
+| VRx      | A0                |                  |
+| VRy      | A1                |                  |
+| SW       | Digital           | Optional         |
+
+
+| Button   | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| Cable1   | GND               |                  |
+| Cable2   | Pin 8             |                  |
+
+*/
+
+
+
+
+
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
 
 RF24 radio(9, 10); // CE, CSN
-const byte address[6] = "00001";
+
+const byte addressX[6] = "00001";
+const byte addressY[6] = "00002";
 
 const int VRx_PIN = A0;
-const int DEADZONE = 20;
+const int VRy_PIN = A1;
+const int FIRE_BTN = 8;
+const int DEADZONE = 10;
 
-int16_t sendValue = 0;
+// Paket für Y + Fire
+struct YFireData {
+  int16_t y;
+  bool fire;
+};
+
+YFireData yFire;
 
 void setup() {
   Serial.begin(9600);
+  pinMode(FIRE_BTN, INPUT_PULLUP);
 
   radio.begin();
-  radio.openWritingPipe(address);
   radio.setPALevel(RF24_PA_LOW);
   radio.stopListening();
 }
 
 void loop() {
-  int raw = analogRead(VRx_PIN);   // 0–1023
-  int centered = raw - 512;        // -512 … +511
+  // ---------- X ----------
+  int rawX = analogRead(VRx_PIN);
+  int x = rawX - 512;
+  if (abs(x) < DEADZONE) x = 0;
 
-  // Deadzone → 0 senden
-  if (abs(centered) < DEADZONE) {
-    sendValue = 0;
-  } else {
-    sendValue = centered;
-  }
+  radio.openWritingPipe(addressX);
+  radio.write(&x, sizeof(x));
 
-  radio.write(&sendValue, sizeof(sendValue));
+  // ---------- Y ----------
+  int rawY = analogRead(VRy_PIN);
+  int y = rawY - 512;
+  if (abs(y) < DEADZONE) y = 0;
+  yFire.y = y;
 
-  Serial.print("Send: ");
-  Serial.println(sendValue);
+  // ---------- Fire ----------
+  yFire.fire = (digitalRead(FIRE_BTN) == LOW);
+
+  radio.openWritingPipe(addressY);
+  radio.write(&yFire, sizeof(yFire));
+
+  // ---------- Debug ----------
+  Serial.print("X: ");
+  Serial.print(x);
+  Serial.print(" | Y: ");
+  Serial.print(yFire.y);
+  Serial.print(" | Fire: ");
+  Serial.println(yFire.fire ? "YES" : "NO");
 
   delay(20);
 }
