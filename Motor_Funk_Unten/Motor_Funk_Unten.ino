@@ -1,3 +1,32 @@
+
+/*
+Code für Uno mit Motor und Sender (Unteres Turretmodul)
+ - left/right 
+
+| NRF24L01 | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+|   VCC    | 3.3V              | NIEMALS 5V       |
+|   GND    | GND               | Gemeinsame Masse |
+|   CE     | Pin 9             | Frei wählbar     |
+|   CSN    | Pin 10            | Frei wählbar     |
+|   SCK    | Pin 13            | SPI-Clock        |
+|   MOSI   | Pin 11            | SPI-Daten        |
+|   MISO   | Pin 12            | SPI-Daten        |
+|   IRQ    | nicht anschließen | Optional         |
+
+
+| Treiber  | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| -        | GND               |                  |
+| +        | 5V                |                  |
+| 1N1      | Pin 4             |                  |
+| 1N1      | Pin 5             |                  |
+| 1N1      | Pin 6             |                  |
+| 1N1      | Pin 7             |                  |
+
+*/
+
+
 #include <Stepper.h>
 #include <SPI.h>
 #include <nRF24L01.h>
