@@ -11,7 +11,7 @@ Usecase der Lybarys
 * LiquidCrystal I2C -- Display
 
 RF24 Funkmodul
- ┌───────────────┐
+`` ┌───────────────┐
  │ NRF24L01      │
  │               │
  │  ┌100µF┐      │
@@ -19,4 +19,4 @@ RF24 Funkmodul
  │ CE    CSN     │
  │ SCK   MOSI    │
  │ MISO  IRQ     │
- └───────────────┘
+ └───────────────┘``
