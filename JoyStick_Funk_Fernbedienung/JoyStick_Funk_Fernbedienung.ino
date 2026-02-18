@@ -51,9 +51,10 @@ const int FIRE_BTN = 8;
 const int DEADZONE = 10;
 
 // Paket für Y + Fire
+
 struct YFireData {
   int16_t y;
-  bool fire;
+  uint8_t fire;   // statt bool
 };
 
 YFireData yFire;
@@ -83,7 +84,7 @@ void loop() {
   yFire.y = y;
 
   // ---------- Fire ----------
-  yFire.fire = (digitalRead(FIRE_BTN) == LOW);
+  yFire.fire = (digitalRead(FIRE_BTN) == LOW) ? 1 : 0;
 
   radio.openWritingPipe(addressY);
   radio.write(&yFire, sizeof(yFire));

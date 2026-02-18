@@ -39,42 +39,120 @@ Code für Uno mit Display, DCs, Servo, VRotator und Sender
 
 
 */
+/*
+Empfänger mit:
+- Display (Augen)
+- DC Motoren
+- Servo (Pfeil)
+- NRF24L01 Empfang von Y + Fire
+*/
 
 #include <Servo.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
+#include <SPI.h>
+#include <nRF24L01.h>
+#include <RF24.h>
+
+// ================= NRF24 =================
+
+RF24 radio(9, 10); // CE, CSN
+const byte addressY[6] = "00002";
+
+struct YFireData {
+  int16_t y;
+  uint8_t fire;   // statt bool
+};
+
+YFireData receivedData;
+
+// ================= DISPLAY =================
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-Servo servo;
 
 // ================= SERVO =================
 
-int angle = 10;
-bool servoDirectionUp = true;
+Servo servo;
 
-unsigned long lastServoUpdate = 0;
-const unsigned long servoInterval = 15; // ms
+const int SERVO_REST = 10;      // Ausgangsposition
+const int SERVO_FIRE = 120;     // Schuss Position
+bool isFiring = false;
+bool lastFireState = false;
 
 // ================= SETUP =================
 
 void setup() {
 
+  Serial.begin(9600);
+
   InitializeDCMotor();
 
+  // Servo
   servo.attach(8);
-  servo.write(angle);
+  servo.write(SERVO_REST);
 
+  // Display
   lcd.init();
   lcd.backlight();
-
   loadEyeChars();
   drawEyes();
+
+  // Radio
+  radio.begin();
+  radio.setPALevel(RF24_PA_LOW);
+  radio.openReadingPipe(0, addressY);
+  radio.startListening();
 }
 
 // ================= LOOP =================
 
 void loop() {
-  UpdateServo();
+
+  if (radio.available()) {
+
+    radio.read(&receivedData, sizeof(receivedData));
+
+    Serial.print("Empfangen -> Y: ");
+    Serial.print(receivedData.y);
+    Serial.print(" | Fire: ");
+    Serial.println(receivedData.fire ? "JA" : "NEIN");
+
+    bool currentFire = (receivedData.fire == 1);
+
+    // Nur auslösen wenn Knopf neu gedrückt wurde
+    if (currentFire && !lastFireState && !isFiring) {
+      Serial.println(">>> FIRE TRIGGERED <<<");
+      fireArrow();
+    }
+
+    lastFireState = currentFire;
+
+  } else {
+    Serial.println("Keine Daten empfangen...");
+  }
+
+  delay(100);  // damit es lesbar bleibt
+}
+
+
+
+// ================= FIRE FUNKTION =================
+
+void fireArrow() {
+
+  isFiring = true;
+
+  Serial.println("FIRE!");
+
+  // Vorfahren
+  servo.write(SERVO_FIRE);
+  delay(300);   // Zeit zum Pfeil schieben
+
+  // Zurückfahren
+  servo.write(SERVO_REST);
+  delay(300);   // Zeit zum Zurückfahren
+
+  isFiring = false;
 }
 
 
@@ -92,9 +170,9 @@ void InitializeDCMotor() {
   digitalWrite(4, LOW);
 }
 
+
 // ================= AUGE CUSTOM CHARS =================
 
-// obere Reihe
 byte eyeTopLeft[8] = {
   B00000,B00000,B00000,B00000,
   B00000,B00001,B00011,B01111
@@ -110,12 +188,6 @@ byte eyeTopRight[8] = {
   B00000,B10000,B11000,B11110
 };
 
-// untere Reihe
-byte eyeBottomLeftOuter[8] = {
-  B00000,B00001,B00001,B00000,
-  B00000,B00000,B00000,B00000
-};
-
 byte eyeBottomLeft[8] = {
   B11100,B11000,B11000,B00000,
   B00000,B00000,B00000,B00000
@@ -123,6 +195,11 @@ byte eyeBottomLeft[8] = {
 
 byte eyeBottomRight[8] = {
   B00111,B00011,B00011,B00000,
+  B00000,B00000,B00000,B00000
+};
+
+byte eyeBottomLeftOuter[8] = {
+  B00000,B00001,B00001,B00000,
   B00000,B00000,B00000,B00000
 };
 
@@ -155,7 +232,7 @@ void drawEyes() {
   lcd.setCursor(5, 1); lcd.write(byte(4));
   lcd.setCursor(6, 1); lcd.write(byte(6));
 
-  // Rechtes Auge (identisch)
+  // Rechtes Auge
   lcd.setCursor(10, 0); lcd.write(byte(0));
   lcd.setCursor(11, 0); lcd.write(byte(1));
   lcd.setCursor(12, 0); lcd.write(byte(2));
@@ -164,22 +241,4 @@ void drawEyes() {
   lcd.setCursor(10, 1); lcd.write(byte(3));
   lcd.setCursor(12, 1); lcd.write(byte(4));
   lcd.setCursor(13, 1); lcd.write(byte(6));
-}
-
-// ================= SERVO UPDATE =================
-
-void UpdateServo() {
-  if (millis() - lastServoUpdate >= servoInterval) {
-    lastServoUpdate = millis();
-
-    if (servoDirectionUp) {
-      angle++;
-      if (angle >= 180) servoDirectionUp = false;
-    } else {
-      angle--;
-      if (angle <= 10) servoDirectionUp = true;
-    }
-
-    servo.write(angle);
-  }
 }
