@@ -1,152 +1,186 @@
+
+/*
+Code für Uno mit Display, DCs, Servo, VRotator und Sender
+
+| NRF24L01 | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+|   VCC    | 3.3V              | NIEMALS 5V       |
+|   GND    | GND               | Gemeinsame Masse |
+|   CE     | Pin 9             | Frei wählbar     |
+|   CSN    | Pin 10            | Frei wählbar     |
+|   SCK    | Pin 13            | SPI-Clock        |
+|   MOSI   | Pin 11            | SPI-Daten        |
+|   MISO   | Pin 12            | SPI-Daten        |
+|   IRQ    | nicht anschließen | Optional         |
+
+
+| Treiber  | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| -        | GND               |                  |
+| +        | 5V                |                  |
+| 1N1      | Pin 4             |                  |
+| 1N1      | Pin 5             |                  |
+| 1N1      | Pin 6             |                  |
+| 1N1      | Pin 7             |                  |
+
+
+| Servo    | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| braun    | GND               |                  |
+| rot      | 5V                |                  |
+| gelb     | Pin 8             |                  |
+
+
+| <Dcs>    | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| M1A      | Pin 4             |                  |
+| M1B      | Pin 5             |                  |
+| M2A      | Pin 6             |                  |
+| M2B      | Pin 7             |                  |
+
+
+*/
+
 #include <Servo.h>
 #include <Wire.h>
 #include <LiquidCrystal_I2C.h>
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-
-// ================== SCREEN TILES ==================
-
-// y = 0 (oben)
-byte char30[8] = { B00000, B00000, B00000, B00000, B00000, B00001, B00011, B01111 };
-byte char40[8] = { B00000, B00000, B00000, B00000, B11111, B11111, B11111, B00000 };
-byte char50[8] = { B00000, B00000, B00000, B00000, B00000, B10000, B11000, B11110 };
-
-byte char100[8] = { B00000, B00000, B00000, B00000, B00000, B00001, B00011, B01111 };
-byte char110[8] = { B00000, B00000, B00000, B00000, B11111, B11111, B11111, B00000 };
-byte char120[8] = { B00000, B00000, B00000, B00000, B00000, B10000, B11000, B11110 };
-
-// y = 1 (unten)
-byte char21[8] = { B00000, B00001, B00001, B00000, B00000, B00000, B00000, B00000 };
-byte char31[8] = { B11100, B11000, B11000, B00000, B00000, B00000, B00000, B00000 };
-byte char51[8] = { B00111, B00011, B00011, B00000, B00000, B00000, B00000, B00000 };
-byte char61[8] = { B00000, B10000, B10000, B00000, B00000, B00000, B00000, B00000 };
-
-byte char121[8] = { B00111, B00011, B00011, B00000, B00000, B00000, B00000, B00000 };
-byte char131[8] = { B00000, B10000, B10000, B00000, B00000, B00000, B00000, B00000 };
-
-byte char91[8] = { B00000, B00001, B00001, B00000, B00000, B00000, B00000, B00000 };
-byte char101[8] = { B11100, B11000, B11000, B00000, B00000, B00000, B00000, B00000 };
-
 Servo servo;
+
+// ================= SERVO =================
+
 int angle = 10;
+bool servoDirectionUp = true;
+
+unsigned long lastServoUpdate = 0;
+const unsigned long servoInterval = 15; // ms
+
+// ================= SETUP =================
 
 void setup() {
-  InitializeDCMotor();                                                                                                                                                                         
-  
+
+  InitializeDCMotor();
+
   servo.attach(8);
   servo.write(angle);
 
   lcd.init();
   lcd.backlight();
-  lcd.clear();
+
+  loadEyeChars();
+  drawEyes();
+}
+
+// ================= LOOP =================
+
+void loop() {
+  UpdateServo();
 }
 
 
-void loop() 
-{ 
-  HandleServo();
-  HandleScreen();
-}
+// ================= DC MOTOR INIT =================
 
 void InitializeDCMotor() {
-  pinMode(5, OUTPUT); //M1A
-  pinMode(4, OUTPUT); //M1B
-  pinMode(7, OUTPUT); //M2A
-  pinMode(6, OUTPUT); //M2B
+  pinMode(7, OUTPUT);
+  pinMode(6, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(4, OUTPUT);
   
+  digitalWrite(7, LOW);
+  digitalWrite(6, HIGH);
   digitalWrite(5, HIGH);
   digitalWrite(4, LOW);
-  digitalWrite(7, HIGH);
-  digitalWrite(6, LOW);
 }
 
-void HandleServo() {
-  // scan from 0 to 180 degrees
-  for(angle = 10; angle < 180; angle++)  
-  {                                  
-    servo.write(angle);               
-    delay(15);                   
-  } 
-  // now scan back from 180 to 0 degrees
-  for(angle = 180; angle > 10; angle--)    
-  {                                
-    servo.write(angle);           
-    delay(15);       
-  } 
+// ================= AUGE CUSTOM CHARS =================
+
+// obere Reihe
+byte eyeTopLeft[8] = {
+  B00000,B00000,B00000,B00000,
+  B00000,B00001,B00011,B01111
+};
+
+byte eyeTopMid[8] = {
+  B00000,B00000,B00000,B00000,
+  B11111,B11111,B11111,B00000
+};
+
+byte eyeTopRight[8] = {
+  B00000,B00000,B00000,B00000,
+  B00000,B10000,B11000,B11110
+};
+
+// untere Reihe
+byte eyeBottomLeftOuter[8] = {
+  B00000,B00001,B00001,B00000,
+  B00000,B00000,B00000,B00000
+};
+
+byte eyeBottomLeft[8] = {
+  B11100,B11000,B11000,B00000,
+  B00000,B00000,B00000,B00000
+};
+
+byte eyeBottomRight[8] = {
+  B00111,B00011,B00011,B00000,
+  B00000,B00000,B00000,B00000
+};
+
+byte eyeBottomRightOuter[8] = {
+  B00000,B10000,B10000,B00000,
+  B00000,B00000,B00000,B00000
+};
+
+void loadEyeChars() {
+  lcd.createChar(0, eyeTopLeft);
+  lcd.createChar(1, eyeTopMid);
+  lcd.createChar(2, eyeTopRight);
+  lcd.createChar(3, eyeBottomLeft);
+  lcd.createChar(4, eyeBottomRight);
+  lcd.createChar(5, eyeBottomLeftOuter);
+  lcd.createChar(6, eyeBottomRightOuter);
 }
 
-void HandleScreen() {
-  loadSetA();
-  drawSetA();
-  delayMicroseconds(15000);
-  lcd.clear();
+// ================= AUGEN ZEICHNEN =================
 
-  loadSetB();
-  drawSetB();
-  delayMicroseconds(15000);
-  lcd.clear();
+void drawEyes() {
+
+  // Linkes Auge
+  lcd.setCursor(3, 0); lcd.write(byte(0));
+  lcd.setCursor(4, 0); lcd.write(byte(1));
+  lcd.setCursor(5, 0); lcd.write(byte(2));
+
+  lcd.setCursor(2, 1); lcd.write(byte(5));
+  lcd.setCursor(3, 1); lcd.write(byte(3));
+  lcd.setCursor(5, 1); lcd.write(byte(4));
+  lcd.setCursor(6, 1); lcd.write(byte(6));
+
+  // Rechtes Auge (identisch)
+  lcd.setCursor(10, 0); lcd.write(byte(0));
+  lcd.setCursor(11, 0); lcd.write(byte(1));
+  lcd.setCursor(12, 0); lcd.write(byte(2));
+
+  lcd.setCursor(9, 1); lcd.write(byte(5));
+  lcd.setCursor(10, 1); lcd.write(byte(3));
+  lcd.setCursor(12, 1); lcd.write(byte(4));
+  lcd.setCursor(13, 1); lcd.write(byte(6));
 }
 
+// ================= SERVO UPDATE =================
 
+void UpdateServo() {
+  if (millis() - lastServoUpdate >= servoInterval) {
+    lastServoUpdate = millis();
 
-// ================== SET A ==================
-// obere Hälfte
-void loadSetA() {
-  lcd.createChar(0, char30);   // x3 y0
-  lcd.createChar(1, char40);   // x4 y0
-  lcd.createChar(2, char50);   // x5 y0
-  lcd.createChar(3, char100);  // x10 y0
-  lcd.createChar(4, char110);  // x11 y0
-  lcd.createChar(5, char120);  // x12 y0
-  lcd.createChar(6, char21);   // x2 y1
-  lcd.createChar(7, char31);   // x3 y1
-}
+    if (servoDirectionUp) {
+      angle++;
+      if (angle >= 180) servoDirectionUp = false;
+    } else {
+      angle--;
+      if (angle <= 10) servoDirectionUp = true;
+    }
 
-// ================== SET B ==================
-// untere Hälfte
-void loadSetB() {
-  lcd.createChar(0, char51);   // x5 y1
-  lcd.createChar(1, char61);   // x6 y1
-  lcd.createChar(2, char121);  // x12 y1
-  lcd.createChar(3, char131);  // x13 y1
-  lcd.createChar(4, char91);   // x9 y1
-  lcd.createChar(5, char101);  // x10 y1
-  lcd.createChar(6, char30);   // dummy
-  lcd.createChar(7, char30);   // dummy
-}
-
-// ================== DRAW ==================
-void drawSetA() {
-  lcd.setCursor(3, 0);
-  lcd.write(byte(0));
-  lcd.setCursor(4, 0);
-  lcd.write(byte(1));
-  lcd.setCursor(5, 0);
-  lcd.write(byte(2));
-  lcd.setCursor(10, 0);
-  lcd.write(byte(3));
-  lcd.setCursor(11, 0);
-  lcd.write(byte(4));
-  lcd.setCursor(12, 0);
-  lcd.write(byte(5));
-
-  lcd.setCursor(2, 1);
-  lcd.write(byte(6));
-  lcd.setCursor(3, 1);
-  lcd.write(byte(7));
-}
-
-void drawSetB() {
-  lcd.setCursor(5, 1);
-  lcd.write(byte(0));
-  lcd.setCursor(6, 1);
-  lcd.write(byte(1));
-  lcd.setCursor(12, 1);
-  lcd.write(byte(2));
-  lcd.setCursor(13, 1);
-  lcd.write(byte(3));
-  lcd.setCursor(9, 1);
-  lcd.write(byte(4));
-  lcd.setCursor(10, 1);
-  lcd.write(byte(5));
+    servo.write(angle);
+  }
 }
