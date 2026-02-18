@@ -14,14 +14,12 @@ Code für Uno mit Display, DCs, Servo, VRotator und Sender
 |   IRQ    | nicht anschließen | Optional         |
 
 
-| Treiber  | Arduino           | Erklärung        |
+| Display  | Arduino           | Erklärung        |
 | -------- | ----------------- | ---------------- |
-| -        | GND               |                  |
-| +        | 5V                |                  |
-| 1N1      | Pin 4             |                  |
-| 1N1      | Pin 5             |                  |
-| 1N1      | Pin 6             |                  |
-| 1N1      | Pin 7             |                  |
+| GND      | GND               |                  |
+| VCC      | 5V                |                  |
+| SDA      | A4                |                  |
+| SCL      | A5                |                  |
 
 
 | Servo    | Arduino           | Erklärung        |
@@ -33,6 +31,7 @@ Code für Uno mit Display, DCs, Servo, VRotator und Sender
 
 | <Dcs>    | Arduino           | Erklärung        |
 | -------- | ----------------- | ---------------- |
+| GND      | GND               |                  |
 | M1A      | Pin 4             |                  |
 | M1B      | Pin 5             |                  |
 | M2A      | Pin 6             |                  |
