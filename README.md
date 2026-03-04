@@ -20,4 +20,5 @@ RF24 Funkmodul
  │ CE    CSN     │
  │ SCK   MOSI    │
  │ MISO  IRQ     │
- └───────────────┘```
+ └───────────────┘
+ ```
