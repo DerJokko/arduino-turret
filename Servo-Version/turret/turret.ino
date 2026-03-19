@@ -56,8 +56,8 @@ Servo servoFire;  // Schuss
 int posX = 90;
 int posY = 90;
 
-const int FIRE_SHOOT = 120;
-const int FIRE_REST  = 10;
+const int FIRE_SHOOT = 25;
+const int FIRE_REST  = 85;
 
 bool lastFireState = false;
 bool isFiring = false;
@@ -102,7 +102,7 @@ void loop() {
     servoX.write(posX);
 
     // ======== Y SERVO ========
-    posY = map(data.y, -512, 512, 0, 180);
+    posY = map(data.y, -512, 512, 60, 120);
     posY = constrain(posY, 0, 180);
     servoY.write(posY);
 

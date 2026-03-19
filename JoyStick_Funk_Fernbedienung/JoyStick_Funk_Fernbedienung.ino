@@ -4,7 +4,7 @@ Code für Uno mit Joystick und Sender
  - left/right 
  - fire button
 
-| NRF24L01 | Arduino           | Erklärung        |
+| NRF24c:\Users\lauri\Documents\Documents\Creative\Coding\Arduino\arduino-turret\Servo-Version\turret\turret.inoL01 | Arduino           | Erklärung        |
 | -------- | ----------------- | ---------------- |
 |   VCC    | 3.3V              | NIEMALS 5V       |
 |   GND    | GND               | Gemeinsame Masse |
