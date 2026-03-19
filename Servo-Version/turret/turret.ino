@@ -16,11 +16,13 @@ Empfänger mit:
 |   IRQ    | nicht anschließen | Optional         |
 
 
-| Servo    | Arduino           | Erklärung        |
+| Servos   | Arduino           | Erklärung        |
 | -------- | ----------------- | ---------------- |
 | braun    | GND               |                  |
 | rot      | 5V                |                  |
-| gelb     | Pin 8             |                  |
+| x        | Pin 3             | R/L              |
+| y        | Pin 5             | O/U              |
+| Fire     | Pin 6             |                  |
 
 
 */
@@ -49,9 +51,9 @@ Servo servoX;     // Rechts/Links
 Servo servoY;     // Oben/Unten
 Servo servoFire;  // Schuss
 
-#define PIN_X 6
+#define PIN_X 3
 #define PIN_Y 5
-#define PIN_FIRE 3
+#define PIN_FIRE 6
 
 int posX = 90;
 int posY = 90;
