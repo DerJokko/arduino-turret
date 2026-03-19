@@ -1,8 +1,6 @@
 
 /*
-Empfänger mit:
-- Servo
-- NRF24L01 Empfang von X, Y + Fire
+Code für Uno mit Display, DCs, Servo, VRotator und Sender
 
 | NRF24L01 | Arduino           | Erklärung        |
 | -------- | ----------------- | ---------------- |
@@ -16,6 +14,14 @@ Empfänger mit:
 |   IRQ    | nicht anschließen | Optional         |
 
 
+| Display  | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| GND      | GND               |                  |
+| VCC      | 5V                |                  |
+| SDA      | A4                |                  |
+| SCL      | A5                |                  |
+
+
 | Servo    | Arduino           | Erklärung        |
 | -------- | ----------------- | ---------------- |
 | braun    | GND               |                  |
@@ -23,61 +29,107 @@ Empfänger mit:
 | gelb     | Pin 8             |                  |
 
 
+| <Dcs>    | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| GND      | GND               |                  |
+| M1A      | Pin 4             |                  |
+| M1B      | Pin 5             |                  |
+| M2A      | Pin 6             |                  |
+| M2B      | Pin 7             |                  |
+
+
+| Stepper  | Arduino           | Erklärung        |
+| -------- | ----------------- | ---------------- |
+| GND      | GND               |                  |
+| 5V       | 5V                | später Battery   |
+| IN1      | A0                |                  |
+| IN2      | A1                |                  |
+| IN3      | A2                |                  |
+| IN4      | A3                |                  |
+
+*/
+/*
+Empfänger mit:
+- Display (Augen)
+- DC Motoren
+- Servo (Pfeil)
+- NRF24L01 Empfang von Y + Fire
 */
 
 #include <Servo.h>
+#include <Wire.h>
+#include <LiquidCrystal_I2C.h>
 #include <SPI.h>
 #include <nRF24L01.h>
 #include <RF24.h>
+#include <Stepper.h>
+
+// ---------- STEPPER ----------
+const int stepsPerRevolution = 2048;
+Stepper motorVertical(stepsPerRevolution, A0, A2, A1, A3);
+
+// Motor Config
+int maxRPM = 15;
+const int stepMultiplier = 4;
+
+unsigned long lastReceiveTime = 0;
+const unsigned long TIMEOUT_MS = 200;
+
 
 // ================= NRF24 =================
 
-RF24 radio(9, 10);
-const byte address[6] = "00001";
+RF24 radio(9, 10);  // CE, CSN
+const byte addressY[6] = "00002";
 
-struct ControlData {
-  int16_t x;
+struct YFireData {
   int16_t y;
-  uint8_t fire;
+  uint8_t fire;  // statt bool
 };
 
-ControlData data;
+YFireData receivedData;
 
-// ================= SERVOS =================
+unsigned long lastRadioCheck = 0;
+const unsigned long RADIO_INTERVAL = 100;
 
-Servo servoX;     // Rechts/Links
-Servo servoY;     // Oben/Unten
-Servo servoFire;  // Schuss
+long currentY = 0;  // letzter gültiger Wert
 
-#define PIN_X 6
-#define PIN_Y 5
-#define PIN_FIRE 3
 
-int posX = 90;
-int posY = 90;
+// ================= DISPLAY =================
 
-const int FIRE_SHOOT = 120;
-const int FIRE_REST  = 10;
+LiquidCrystal_I2C lcd(0x27, 16, 2);
 
-bool lastFireState = false;
+// ================= SERVO =================
+
+Servo servo;
+
+const int SERVO_REST = 10;   // Ausgangsposition
+const int SERVO_FIRE = 120;  // Schuss Position
 bool isFiring = false;
+bool lastFireState = false;
+
 
 // ================= SETUP =================
 
 void setup() {
+
   Serial.begin(9600);
 
-  servoX.attach(PIN_X);
-  servoY.attach(PIN_Y);
-  servoFire.attach(PIN_FIRE);
+  InitializeDCMotor();
 
-  servoX.write(posX);
-  servoY.write(posY);
-  servoFire.write(FIRE_REST);
+  // Servo
+  servo.attach(8);
+  servo.write(SERVO_REST);
 
+  // Display
+  lcd.init();
+  lcd.backlight();
+  loadEyeChars();
+  drawEyes();
+
+  // Radio
   radio.begin();
   radio.setPALevel(RF24_PA_LOW);
-  radio.openReadingPipe(0, address);
+  radio.openReadingPipe(0, addressY);
   radio.startListening();
 }
 
@@ -85,50 +137,186 @@ void setup() {
 
 void loop() {
 
-  if (radio.available()) {
+  unsigned long currentMillis = millis();
 
-    radio.read(&data, sizeof(data));
+  // 📡 Radio nur alle 100ms prüfen
+  if (currentMillis - lastRadioCheck >= RADIO_INTERVAL) {
 
-    Serial.print("X: ");
-    Serial.print(data.x);
-    Serial.print(" | Y: ");
-    Serial.print(data.y);
-    Serial.print(" | Fire: ");
-    Serial.println(data.fire);
+    lastRadioCheck = currentMillis;
 
-    // ======== X SERVO ========
-    posX = map(data.x, -512, 512, 0, 180);
-    posX = constrain(posX, 0, 180);
-    servoX.write(posX);
+    if (radio.available()) {
 
-    // ======== Y SERVO ========
-    posY = map(data.y, -512, 512, 0, 180);
-    posY = constrain(posY, 0, 180);
-    servoY.write(posY);
+      radio.read(&receivedData, sizeof(receivedData));
 
-    // ======== FIRE ========
-    bool currentFire = (data.fire == 1);
+      Serial.print("Empfangen -> Y: ");
+      Serial.print(receivedData.y);
+      Serial.print(" | Fire: ");
+      Serial.println(receivedData.fire ? "JA" : "NEIN");
 
-    if (currentFire && !lastFireState && !isFiring) {
-      fire();
+      lastReceiveTime = millis();
+      currentY = receivedData.y;
+
+      bool currentFire = (receivedData.fire == 1);
+
+      if (currentFire && !lastFireState && !isFiring) {
+        fireArrow();
+      }
+
+      lastFireState = currentFire;
     }
-
-    lastFireState = currentFire;
   }
+
+  // 🚨 Failsafe
+  if (millis() - lastReceiveTime > TIMEOUT_MS) {
+    currentY = 0;
+  }
+
+  // ⚙️ Stepper läuft IMMER
+  MoveVertical(currentY);
 }
 
-// ================= FIRE =================
 
-void fire() {
+// ================= FIRE FUNKTION =================
+
+void fireArrow() {
+
   isFiring = true;
 
   Serial.println("FIRE!");
 
-  servoFire.write(FIRE_SHOOT);
-  delay(200);
+  // Vorfahren
+  servo.write(SERVO_FIRE);
+  delay(300);  // Zeit zum Pfeil schieben
 
-  servoFire.write(FIRE_REST);
-  delay(200);
+  // Zurückfahren
+  servo.write(SERVO_REST);
+  delay(300);  // Zeit zum Zurückfahren
 
   isFiring = false;
 }
+
+
+// ================= DC MOTOR INIT =================
+
+void InitializeDCMotor() {
+  pinMode(7, OUTPUT);
+  pinMode(6, OUTPUT);
+  pinMode(5, OUTPUT);
+  pinMode(4, OUTPUT);
+
+  digitalWrite(7, LOW);
+  digitalWrite(6, HIGH);
+  digitalWrite(5, HIGH);
+  digitalWrite(4, LOW);
+}
+
+
+// ================= AUGE CUSTOM CHARS =================
+
+byte eyeTopLeft[8] = {
+  B00000, B00000, B00000, B00000,
+  B00000, B00001, B00011, B01111
+};
+
+byte eyeTopMid[8] = {
+  B00000, B00000, B00000, B00000,
+  B11111, B11111, B11111, B00000
+};
+
+byte eyeTopRight[8] = {
+  B00000, B00000, B00000, B00000,
+  B00000, B10000, B11000, B11110
+};
+
+byte eyeBottomLeft[8] = {
+  B11100, B11000, B11000, B00000,
+  B00000, B00000, B00000, B00000
+};
+
+byte eyeBottomRight[8] = {
+  B00111, B00011, B00011, B00000,
+  B00000, B00000, B00000, B00000
+};
+
+byte eyeBottomLeftOuter[8] = {
+  B00000, B00001, B00001, B00000,
+  B00000, B00000, B00000, B00000
+};
+
+byte eyeBottomRightOuter[8] = {
+  B00000, B10000, B10000, B00000,
+  B00000, B00000, B00000, B00000
+};
+
+void loadEyeChars() {
+  lcd.createChar(0, eyeTopLeft);
+  lcd.createChar(1, eyeTopMid);
+  lcd.createChar(2, eyeTopRight);
+  lcd.createChar(3, eyeBottomLeft);
+  lcd.createChar(4, eyeBottomRight);
+  lcd.createChar(5, eyeBottomLeftOuter);
+  lcd.createChar(6, eyeBottomRightOuter);
+}
+
+// ================= AUGEN ZEICHNEN =================
+
+void drawEyes() {
+
+  // Linkes Auge
+  lcd.setCursor(3, 0);
+  lcd.write(byte(0));
+  lcd.setCursor(4, 0);
+  lcd.write(byte(1));
+  lcd.setCursor(5, 0);
+  lcd.write(byte(2));
+
+  lcd.setCursor(2, 1);
+  lcd.write(byte(5));
+  lcd.setCursor(3, 1);
+  lcd.write(byte(3));
+  lcd.setCursor(5, 1);
+  lcd.write(byte(4));
+  lcd.setCursor(6, 1);
+  lcd.write(byte(6));
+
+  // Rechtes Auge
+  lcd.setCursor(10, 0);
+  lcd.write(byte(0));
+  lcd.setCursor(11, 0);
+  lcd.write(byte(1));
+  lcd.setCursor(12, 0);
+  lcd.write(byte(2));
+
+  lcd.setCursor(9, 1);
+  lcd.write(byte(5));
+  lcd.setCursor(10, 1);
+  lcd.write(byte(3));
+  lcd.setCursor(12, 1);
+  lcd.write(byte(4));
+  lcd.setCursor(13, 1);
+  lcd.write(byte(6));
+}
+
+// ================= STEPPER =================
+
+void MoveVertical(int value) {
+
+  if (abs(value) < 35) return;  // Deadzone etwas größer
+
+  float speedFraction = (float)value / 512.0;
+  int motorRPM = speedFraction * maxRPM;
+
+  int absRPM = abs(motorRPM);
+
+  // 🔥 WICHTIG: Minimum 1 RPM erzwingen
+  if (absRPM < 1) absRPM = 1;
+
+  motorVertical.setSpeed(absRPM);
+
+  if (motorRPM > 0) {
+    motorVertical.step(1);
+  } else {
+    motorVertical.step(-1);
+  }
+}
+
