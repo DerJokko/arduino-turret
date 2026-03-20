@@ -20,9 +20,9 @@ Empfänger mit:
 | -------- | ----------------- | ---------------- |
 | braun    | GND               |                  |
 | rot      | 5V                |                  |
-| x        | Pin 3             | R/L              |
+| x        | Pin 6             | R/L              |
 | y        | Pin 5             | O/U              |
-| Fire     | Pin 6             |                  |
+| Fire     | Pin 3             |                  |
 
 
 */
@@ -51,15 +51,15 @@ Servo servoX;     // Rechts/Links
 Servo servoY;     // Oben/Unten
 Servo servoFire;  // Schuss
 
-#define PIN_X 3
+#define PIN_X 6
 #define PIN_Y 5
-#define PIN_FIRE 6
+#define PIN_FIRE 3
 
 int posX = 90;
 int posY = 90;
 
 const int FIRE_SHOOT = 25;
-const int FIRE_REST  = 85;
+const int FIRE_REST = 85;
 
 bool lastFireState = false;
 bool isFiring = false;
@@ -78,7 +78,7 @@ void setup() {
   servoFire.write(FIRE_REST);
 
   radio.begin();
-  radio.setPALevel(RF24_PA_LOW);
+  radio.setPALevel(RF24_PA_HIGH);
   radio.openReadingPipe(0, address);
   radio.startListening();
 }
@@ -104,7 +104,7 @@ void loop() {
     servoX.write(posX);
 
     // ======== Y SERVO ========
-    posY = map(data.y, -512, 512, 60, 120);
+    posY = map(data.y, -512, 512, 60, 160);
     posY = constrain(posY, 0, 180);
     servoY.write(posY);
 

@@ -37,7 +37,7 @@ Code für Uno mit Joystick und Sender
 #include <nRF24L01.h>
 #include <RF24.h>
 
-RF24 radio(9, 10); // CE, CSN
+RF24 radio(9, 10);  // CE, CSN
 
 const byte address[6] = "00001";
 
@@ -45,6 +45,11 @@ const int VRx_PIN = A0;
 const int VRy_PIN = A1;
 const int FIRE_BTN = 8;
 const int DEADZONE = 10;
+
+float smoothX = 0;
+float smoothY = 0;
+
+const float alpha = 0.2;  // 0.0–1.0 (kleiner = smoother)
 
 // ===== Paket =====
 struct ControlData {
@@ -61,7 +66,7 @@ void setup() {
   pinMode(FIRE_BTN, INPUT_PULLUP);
 
   radio.begin();
-  radio.setPALevel(RF24_PA_LOW);
+  radio.setPALevel(RF24_PA_HIGH);
   radio.openWritingPipe(address);
   radio.stopListening();
 }
@@ -72,13 +77,18 @@ void loop() {
   int rawX = analogRead(VRx_PIN);
   int x = rawX - 512;
   if (abs(x) < DEADZONE) x = 0;
-  data.x = x;
+
+  // Glättung
+  smoothX = smoothX + alpha * (x - smoothX);
+  data.x = -(int)smoothX;
 
   // ===== Y =====
   int rawY = analogRead(VRy_PIN);
   int y = rawY - 512;
   if (abs(y) < DEADZONE) y = 0;
-  data.y = y;
+
+  smoothY = smoothY + alpha * (y - smoothY);
+  data.y = (int)smoothY;
 
   // ===== FIRE =====
   data.fire = (digitalRead(FIRE_BTN) == LOW) ? 1 : 0;
